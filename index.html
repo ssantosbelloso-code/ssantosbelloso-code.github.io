@@ -18,22 +18,32 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
 
-<!-- Enable scroll-reveal only when JS runs; absolute fallback guarantees content is never left hidden -->
+<!-- Scroll-reveal: enabled only when JS runs. Elements animate in as they enter the viewport.
+     Content is visible by default (CSS), so the page is never blank if scripts fail. -->
 <script>
 (function(){
-  document.documentElement.classList.add('js');
-  function showAll(){
+  var d = document.documentElement;
+  if(!window.addEventListener || !document.querySelectorAll){ return; } // no enhancement: content stays visible
+  d.classList.add('js');
+  function revealInView(){
+    var vh = window.innerHeight || d.clientHeight;
     var els = document.querySelectorAll('.reveal:not(.in)');
-    for(var i=0;i<els.length;i++){ els[i].classList.add('in'); }
+    for(var i=0;i<els.length;i++){
+      var r = els[i].getBoundingClientRect();
+      if(r.top < vh * 0.88 && r.bottom > 0){ els[i].classList.add('in'); }
+    }
   }
-  // If anything goes wrong with the observer, reveal everything shortly after load.
-  if(window.addEventListener){
-    window.addEventListener('load', function(){ setTimeout(showAll, 1000); });
-    // Extra guard for very early failures.
-    setTimeout(function(){ if(document.querySelector('.reveal:not(.in)')) showAll(); }, 2500);
-  } else {
-    document.documentElement.className = document.documentElement.className.replace(' js','');
-  }
+  window.addEventListener('scroll', revealInView, {passive:true});
+  window.addEventListener('resize', revealInView, {passive:true});
+  window.addEventListener('load', revealInView);
+  document.addEventListener('DOMContentLoaded', revealInView);
+  // last-resort: if JS ran but somehow nothing ever revealed, show everything so it's never blank
+  setTimeout(function(){
+    if(document.querySelectorAll('.reveal.in').length === 0){
+      var a = document.querySelectorAll('.reveal');
+      for(var i=0;i<a.length;i++){ a[i].classList.add('in'); }
+    }
+  }, 3000);
 })();
 </script>
 
@@ -85,6 +95,10 @@ body{
 @keyframes float2{ 0%,100%{ transform:translate(0,0) scale(1);} 50%{ transform:translate(-50px,30px) scale(1.06);} }
 
 .wrap{ width:100%; max-width:var(--maxw); margin:0 auto; padding:0 24px; }
+
+/* scroll progress bar */
+.scroll-progress{ position:fixed; top:0; left:0; height:3px; width:0; z-index:200; border-radius:0 3px 3px 0;
+  background:linear-gradient(90deg,var(--accent),var(--accent-2),var(--accent-warm)); box-shadow:0 0 12px rgba(79,124,255,.5); }
 
 /* ============ NAV ============ */
 header.nav{
@@ -143,7 +157,8 @@ h2.section-title{ font-family:var(--font-display); font-weight:700; font-size:cl
 .hero-badge .pulse::after{ content:""; position:absolute; inset:0; border-radius:50%; background:var(--accent-2); animation:pulse 2s infinite; }
 @keyframes pulse{ 0%{ transform:scale(1); opacity:.7;} 100%{ transform:scale(3.2); opacity:0;} }
 .hero h1{ font-family:var(--font-display); font-weight:800; font-size:clamp(38px,6vw,68px); line-height:1.02; letter-spacing:-.04em; margin:22px 0 10px; }
-.hero h1 .grad{ background:linear-gradient(120deg,var(--accent),#7a5bff 45%,var(--accent-2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.hero h1 .grad{ background:linear-gradient(120deg,var(--accent),#7a5bff 35%,var(--accent-2) 65%,var(--accent)); background-size:220% auto; -webkit-background-clip:text; background-clip:text; color:transparent; animation:shimmer 6s linear infinite; }
+@keyframes shimmer{ to{ background-position:220% center; } }
 .role-line{ font-family:var(--font-display); font-weight:600; font-size:clamp(15px,2vw,19px); color:var(--ink); margin-bottom:4px; }
 .rotator{ color:var(--accent); }
 .meta-loc{ display:inline-flex; align-items:center; gap:7px; color:var(--ink-faint); font-size:14.5px; font-weight:500; margin-bottom:24px; }
@@ -371,6 +386,8 @@ footer{ padding:46px 0 60px; border-top:1px solid var(--line); margin-top:30px; 
 </style>
 </head>
 <body>
+
+<div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
 
 <div class="ambient" aria-hidden="true">
   <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
@@ -876,6 +893,31 @@ footer{ padding:46px 0 60px; border-top:1px solid var(--line); margin-top:30px; 
     rEl.style.opacity = 0; rEl.style.transition = "opacity .35s";
     setTimeout(function(){ rEl.textContent = roles[ri]; rEl.style.opacity = 1; }, 350);
   }, 2600);
+
+  /* scroll progress bar */
+  var progress = document.getElementById('scrollProgress');
+  if(progress){
+    var updateProgress = function(){
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      progress.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+    };
+    window.addEventListener('scroll', updateProgress, {passive:true});
+    window.addEventListener('resize', updateProgress, {passive:true});
+    updateProgress();
+  }
+
+  /* 3D tilt on cards (pointer devices only) */
+  if(window.matchMedia && window.matchMedia('(pointer:fine)').matches){
+    document.querySelectorAll('.focus-card, .edu-card').forEach(function(card){
+      card.addEventListener('mousemove', function(e){
+        var r = card.getBoundingClientRect();
+        var x = (e.clientX - r.left) / r.width - 0.5;
+        var y = (e.clientY - r.top) / r.height - 0.5;
+        card.style.transform = 'perspective(800px) rotateY(' + (x*5).toFixed(2) + 'deg) rotateX(' + (-y*5).toFixed(2) + 'deg) translateY(-6px)';
+      });
+      card.addEventListener('mouseleave', function(){ card.style.transform = ''; });
+    });
+  }
 
   /* portrait tilt */
   var portrait = document.getElementById('portrait');
